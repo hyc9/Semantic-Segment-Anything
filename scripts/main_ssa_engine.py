@@ -13,6 +13,8 @@ import torch.multiprocessing as mp
 os.environ['MASTER_ADDR'] = 'localhost'
 os.environ['MASTER_PORT'] = '12355'
 
+os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
+
 def parse_args():
     parser = argparse.ArgumentParser(description='Semantically segment anything.')
     parser.add_argument('--data_dir', help='specify the root path of images and masks')
@@ -25,24 +27,28 @@ def parse_args():
     args = parser.parse_args()
     return args
 
+
+base_dir = '/mnt/33t/cy/mllm_models/semantic_sam'
+
 def main(rank, args):
     dist.init_process_group("nccl", rank=rank, world_size=args.world_size)
     if args.light_mode:
         clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
         clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(rank)
     else:
-        clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-large-patch14")
-        clip_model = CLIPModel.from_pretrained("openai/clip-vit-large-patch14").to(rank)
+        clip_processor = CLIPProcessor.from_pretrained(f"{base_dir}/clip-vit-large-patch14")
+        clip_model = CLIPModel.from_pretrained(f"{base_dir}/clip-vit-large-patch14").to(rank)
 
     if args.light_mode:
         oneformer_ade20k_processor = OneFormerProcessor.from_pretrained("shi-labs/oneformer_ade20k_swin_tiny")
         oneformer_ade20k_model = OneFormerForUniversalSegmentation.from_pretrained("shi-labs/oneformer_ade20k_swin_tiny").to(rank)
     else:
-        oneformer_ade20k_processor = OneFormerProcessor.from_pretrained("shi-labs/oneformer_ade20k_swin_large")
-        oneformer_ade20k_model = OneFormerForUniversalSegmentation.from_pretrained("shi-labs/oneformer_ade20k_swin_large").to(rank)
-
-    oneformer_coco_processor = OneFormerProcessor.from_pretrained("shi-labs/oneformer_coco_swin_large")
-    oneformer_coco_model = OneFormerForUniversalSegmentation.from_pretrained("shi-labs/oneformer_coco_swin_large").to(rank)
+        pass
+        
+        #oneformer_ade20k_model = OneFormerForUniversalSegmentation.from_pretrained(f"{base_dir}/oneformer_ade20k_swin_large").to(rank)
+        #oneformer_ade20k_processor = OneFormerProcessor.from_pretrained(f"{base_dir}/oneformer_ade20k_swin_large")
+    oneformer_coco_processor = OneFormerProcessor.from_pretrained(f"{base_dir}/oneformer_coco_swin_large")
+    oneformer_coco_model = OneFormerForUniversalSegmentation.from_pretrained(f"{base_dir}/oneformer_coco_swin_large").to(rank)
 
     # blip_processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-large")
     # blip_model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-large").to(rank)
@@ -51,16 +57,16 @@ def main(rank, args):
         blip_processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
         blip_model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base").to(rank)
     else:
-        blip_processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-large")
-        blip_model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-large").to(rank)
+        blip_processor = BlipProcessor.from_pretrained(f"{base_dir}/blip-image-captioning-large")
+        blip_model = BlipForConditionalGeneration.from_pretrained(f"{base_dir}/blip-image-captioning-large").to(rank)
 
     if args.light_mode:
         clipseg_processor = AutoProcessor.from_pretrained("CIDAS/clipseg-rd16")
         clipseg_model = CLIPSegForImageSegmentation.from_pretrained("CIDAS/clipseg-rd16").to(rank)
         clipseg_processor.image_processor.do_resize = False
     else:
-        clipseg_processor = AutoProcessor.from_pretrained("CIDAS/clipseg-rd64-refined")
-        clipseg_model = CLIPSegForImageSegmentation.from_pretrained("CIDAS/clipseg-rd64-refined").to(rank)
+        clipseg_processor = AutoProcessor.from_pretrained(f"{base_dir}/clipseg-rd64-refined")
+        clipseg_model = CLIPSegForImageSegmentation.from_pretrained(f"{base_dir}/clipseg-rd64-refined").to(rank)
         clipseg_processor.image_processor.do_resize = False
     if args.sam:
         from segment_anything import sam_model_registry, SamAutomaticMaskGenerator
@@ -107,6 +113,11 @@ def main(rank, args):
         # torch.cuda.empty_cache()
 if __name__ == '__main__':
     args = parse_args()
+    args.data_dir = "/root/MLLM/Bagel/cy_test"
+    args.sam = True
+    args.out_dir = "./"
+    args.ckpt_path = "/mnt/33t/cy/mllm_models/semantic_sam/SAM-vit-h/sam_vit_h_4b8939.pth"
+    args.world_size = 1
     if not os.path.exists(args.out_dir):
         os.mkdir(args.out_dir)
     if args.world_size > 1:

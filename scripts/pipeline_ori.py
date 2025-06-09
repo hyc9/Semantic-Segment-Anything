@@ -47,13 +47,6 @@ def load_filename_with_extensions(data_path, filename):
             return full_file_path + ext  # Return True if file is successfully uploaded
     raise FileNotFoundError(f"No such file {full_file_path}, checked for the following extensions {image_extensions}")
 
-
-
-
-
-#
-#读取image, 获取分割
-
 def semantic_annotation_pipeline(filename, data_path, output_path, rank, save_img=False, scale_small=1.2, scale_large=1.6, scale_huge=1.6,
                                  clip_processor=None,
                                  clip_model=None,
