@@ -51,8 +51,17 @@ def load_filename_with_extensions(data_path, filename):
 
 
 
-#
-#读取image, 获取分割
+#请详细讲解一下这个函数
+
+#现在我希望以这个pipeline为准处理我的图像数据为semantic mask表示，需要改动的地方有：
+#我的模型是以很多.tar格式保存的, 这些.tar文件统一保存在data_files目录下，通过这样的方式读取：
+#from datasets import load_dataset
+#dataset = load_dataset("webdataset", data_files=data_files, num_proc=128)
+#原始图片 在['image']标识的这一栏中，我希望生成mask之后, 新增一个['mask']项保存它. 最后处理得到的以同样的.tar格式保存在data_files_new目录中
+
+#我希望得到的mask图像具有长*宽=256的特点。处理方式为：首先按图像的原始分辨率得到semantic mask, 然后将长，宽分别进行一定比例的压缩使得最终的semantic mask满足长*宽=256
+#因此, mask图像一共256个像素，每个像素只有一个通道，标识着这个像素属于的类别，取值为0-num_class
+
 
 def semantic_annotation_pipeline(filename, data_path, output_path, rank, save_img=False, scale_small=1.2, scale_large=1.6, scale_huge=1.6,
                                  clip_processor=None,
@@ -82,8 +91,8 @@ def semantic_annotation_pipeline(filename, data_path, output_path, rank, save_im
         top_k_coco_propose_classes_ids = torch.bincount(coco_propose_classes_ids.flatten()).topk(1).indices
         top_k_ade20k_propose_classes_ids = torch.bincount(ade20k_propose_classes_ids.flatten()).topk(1).indices
         local_class_names = set()
-        local_class_names = set.union(local_class_names, set([CONFIG_ADE20K_ID2LABEL['id2label'][str(class_id.item())] for class_id in top_k_ade20k_propose_classes_ids]))
-        local_class_names = set.union(local_class_names, set(([CONFIG_COCO_ID2LABEL['refined_id2label'][str(class_id.item())] for class_id in top_k_coco_propose_classes_ids])))
+        local_class_names = set.union(local_class_names, set([CONFIG_ADE20K_ID2LABEL['id2label'][str(class_id.item())] for class_id in top_k_ade20k_propose_classes_ids]))  #150
+        local_class_names = set.union(local_class_names, set(([CONFIG_COCO_ID2LABEL['refined_id2label'][str(class_id.item())] for class_id in top_k_coco_propose_classes_ids]))) #133
         patch_small = mmcv.imcrop(img, np.array(
             [ann['bbox'][0], ann['bbox'][1], ann['bbox'][0] + ann['bbox'][2], ann['bbox'][1] + ann['bbox'][3]]),
                                   scale=scale_small)

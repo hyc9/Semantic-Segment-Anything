@@ -12,7 +12,7 @@ import torch.distributed as dist
 import torch.multiprocessing as mp
 os.environ['MASTER_ADDR'] = 'localhost'
 os.environ['MASTER_PORT'] = '12355'
-
+#export HF_ENDPOINT="https://hf-mirror.com"
 os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 
 def parse_args():
@@ -31,7 +31,7 @@ def parse_args():
 base_dir = '/mnt/33t/cy/mllm_models/semantic_sam'
 
 def main(rank, args):
-    dist.init_process_group("nccl", rank=rank, world_size=args.world_size)
+    #dist.init_process_group("nccl", rank=rank, world_size=args.world_size)
     if args.light_mode:
         clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
         clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(rank)
@@ -43,12 +43,15 @@ def main(rank, args):
         oneformer_ade20k_processor = OneFormerProcessor.from_pretrained("shi-labs/oneformer_ade20k_swin_tiny")
         oneformer_ade20k_model = OneFormerForUniversalSegmentation.from_pretrained("shi-labs/oneformer_ade20k_swin_tiny").to(rank)
     else:
-        pass
-        
-        #oneformer_ade20k_model = OneFormerForUniversalSegmentation.from_pretrained(f"{base_dir}/oneformer_ade20k_swin_large").to(rank)
-        #oneformer_ade20k_processor = OneFormerProcessor.from_pretrained(f"{base_dir}/oneformer_ade20k_swin_large")
-    oneformer_coco_processor = OneFormerProcessor.from_pretrained(f"{base_dir}/oneformer_coco_swin_large")
-    oneformer_coco_model = OneFormerForUniversalSegmentation.from_pretrained(f"{base_dir}/oneformer_coco_swin_large").to(rank)
+        #pass
+        oneformer_ade20k_model = OneFormerForUniversalSegmentation.from_pretrained(f"shi-labs/oneformer_ade20k_swin_large").to(rank)
+        oneformer_ade20k_processor = OneFormerProcessor.from_pretrained(f"shi-labs/oneformer_ade20k_swin_large")
+    oneformer_coco_processor = OneFormerProcessor.from_pretrained(f"shi-labs/oneformer_coco_swin_large")
+    oneformer_coco_model = OneFormerForUniversalSegmentation.from_pretrained(f"shi-labs/oneformer_coco_swin_large").to(rank)
+    #     oneformer_ade20k_model = OneFormerForUniversalSegmentation.from_pretrained(f"{base_dir}/oneformer_ade20k_swin_large").to(rank)
+    #     oneformer_ade20k_processor = OneFormerProcessor.from_pretrained(f"{base_dir}/oneformer_ade20k_swin_large")
+    # oneformer_coco_processor = OneFormerProcessor.from_pretrained(f"{base_dir}/oneformer_coco_swin_large")
+    # oneformer_coco_model = OneFormerForUniversalSegmentation.from_pretrained(f"{base_dir}/oneformer_coco_swin_large").to(rank)
 
     # blip_processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-large")
     # blip_model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-large").to(rank)
