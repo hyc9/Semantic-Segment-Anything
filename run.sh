@@ -1,3 +1,2 @@
-source activate ssa
-
-python scripts/semantic_mask_pipeline.py --world_size 2
+source activate ssa;
+python /chengyu/MLLM/Semantic-Segment-Anything/scripts/semantic_mask_pipeline_lc.py --world_size 2
