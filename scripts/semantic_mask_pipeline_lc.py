@@ -39,14 +39,14 @@ os.environ['MASTER_PORT'] = '12306'
 os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 #os.environ['CUDA_VISIBLE_DEVICES'] = '6'
 
-input_dir = '/mnt/33t/cy/blip3o_dataset'
-output_dir = '/mnt/33t/cy/mask_dataset'
-base_dir = '/mnt/33t/cy/mllm_models/semantic_sam'
+input_dir = '/ssdwork/chengyu/blip3o_dataset'
+output_dir = '/ssdwork/chengyu/mask_dataset'
+base_dir = '/ssdwork/chengyu/mllm_models/semantic_sam'
 
 debug = True
 if debug:
     save_key = ""
-    debug_folder = "/mnt/33t/cy/mask_debug_rgb"
+    debug_folder = "/ssdwork/chengyu/mask_debug_rgb"
     os.makedirs(debug_folder, exist_ok=True)
 os.makedirs(output_dir, exist_ok=True)
 
@@ -158,12 +158,12 @@ def main(rank, args):
         crop_n_points_downscale_factor=2, min_mask_region_area=100, output_mode='coco_rle')
     
     tar_files = sorted([os.path.join(input_dir, f) for f in os.listdir(input_dir) if f.endswith('.tar')])
-    tar_files = tar_files[:20]
+    tar_files = tar_files[:10]
     local_files = tar_files[rank::args.world_size]
     
     
     # Dummy run to collect local class names (skip writing)
-    for tar_path in local_files:
+    for tar_path in (local_files if rank != 0 else tqdm.tqdm(local_files)):
         dataset = load_dataset("webdataset", data_files=tar_path, split="train")
         for item in dataset:
             _ = semantic_infer_one_image(item["jpg"], processors, models, rank, preprocess = True)
