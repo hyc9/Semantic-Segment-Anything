@@ -1,0 +1,5 @@
+/opt/conda/envs/ssa/bin/python
+
+source activate ssa
+
+export HF_ENDPOINT="https://hf-mirror.com"
