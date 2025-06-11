@@ -158,14 +158,14 @@ def main(rank, args):
         crop_n_points_downscale_factor=2, min_mask_region_area=100, output_mode='coco_rle')
     
     tar_files = sorted([os.path.join(input_dir, f) for f in os.listdir(input_dir) if f.endswith('.tar')])
-    tar_files = tar_files[:4]
+    tar_files = tar_files[:2]
     local_files = tar_files[rank::args.world_size]
     
     
     # Dummy run to collect local class names (skip writing)
-    for tar_path in (local_files if rank != 0 else tqdm.tqdm(local_files)):
+    for tar_path in local_files:
         dataset = load_dataset("webdataset", data_files=tar_path, split="train")
-        for item in dataset:
+        for item in (tqdm.tqdm(dataset) if rank == 0 else dataset):
             _ = semantic_infer_one_image(item["jpg"], processors, models, rank, preprocess = True)
     
     gathered_classnames = [None for _ in range(args.world_size)]
