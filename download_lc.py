@@ -22,6 +22,7 @@ for repo_id in repo_id_list:
     repo_id=repo_id,
     local_dir_use_symlinks=False,
     resume_download=True,
+    ignore_patterns = ["*.h5"]
     #allow_patterns=["*.json", "*.bin", "*.py", "*.md", "*.txt", '.safetensors', ],
     )
 
