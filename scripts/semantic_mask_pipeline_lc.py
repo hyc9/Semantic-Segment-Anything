@@ -250,7 +250,7 @@ def main(rank, args):
                     "jpg": img,
                     "txt": item['txt'],
                     #"smallmask.tiff": mask_img, 
-                    "mask.tiff":Image.fromarray(semantic_mask, mode="I;16"),  
+                    "tiff":Image.fromarray(semantic_mask, mode="I;16"),  
                     "__key__": key,
                     "__url__": item['__url__']
                     }

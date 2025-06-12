@@ -70,6 +70,7 @@ def semantic_infer_one_image(img: Image.Image, key, processors, models, rank):
     """对一张图像执行语义标注, 返回 shape=(256/w, w) 的单通道 numpy array, 值为 0~num_class"""
     from mmcv import imcrop
     import pycocotools.mask as maskUtils
+    img = Image.fromarray(np.array(img)[:,:, ::-1]) #RGB -> BGR
     img_arr = np.array(img)
     anns = {'annotations': processors['sam_generator'].generate(img_arr)}
     class_ids_from_oneformer_coco = oneformer_coco_segmentation(img,
