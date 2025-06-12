@@ -41,11 +41,11 @@ os.environ['MASTER_PORT'] = '12306'
 os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 #os.environ['CUDA_VISIBLE_DEVICES'] = '6'
 
-input_dir = '/ssdwork/chengyu/blip3o_dataset'
-output_dir = '/ssdwork/chengyu/mask_dataset'
-base_dir = '/ssdwork/chengyu/mllm_models/semantic_sam'
+input_dir = '/mnt/33t/cy/blip3o_dataset'
+output_dir = '/mnt/33t/cy/mask_dataset'
+base_dir = '/mnt/33t/cy/mllm_models/semantic_sam'
 
-debug = False
+debug = True
 if debug:
     debug_folder = "/mnt/33t/cy/mask_debug_rgb"
     os.makedirs(debug_folder, exist_ok=True)
@@ -112,78 +112,41 @@ def semantic_infer_one_image(img: Image.Image, key, processors, models, rank):
         else:
             processors['label2index'][class_name] = len(processors['label2index'])
     
-    semantic_mask = np.zeros((img.height, img.width), dtype=np.int16)
+    semantic_mask = np.zeros((img.height, img.width), dtype=np.int32)
     for mask, name in mask_class:
         semantic_mask[mask] = processors['label2index'][name]
     
-    return semantic_mask
-    # h, w = semantic_mask.shape
-    # aspect = h / w
-    # new_h = int((256 * aspect)**0.5)
-    # new_w = 256 // new_h
-    # assert new_h * new_w == 256
-    # mask_img = Image.fromarray(semantic_mask).resize((new_w, new_h), resample=Image.NEAREST) 
-    # mask_arr = np.array(mask_img)
-    
-    # debug = True
-    # if debug:
-    #     def validate_resize_recovery(original_mask, resized_mask):
-    #         recovered = Image.fromarray(resized_mask, mode='I;16').resize(original_mask.shape[::-1], resample=Image.NEAREST)
-    #         recovered_mask = np.array(recovered)
-    #         error = (original_mask != recovered_mask).sum()
-    #         total = original_mask.size
-    #         img_recover = np.array(img.resize((new_w, new_h), Image.BILINEAR).resize((h, w), Image.BILINEAR))
-    #         error_img = (img_recover != img_arr).sum()
-    #         total_img = img_arr.size
-    #         print(f"Mismatch pixels in mask: {error}/{total} ({100*error/total:.2f}%), img: {error_img}/{total_img} ({100*error_img/total_img:.2f}%)")
-    #     validate_resize_recovery(semantic_mask, mask_arr)
+    h, w = semantic_mask.shape
+    aspect = h / w
+    new_h = int((256 * aspect)**0.5)
+    new_w = 256 // new_h
+    assert new_h * new_w == 256
+    mask_img = Image.fromarray(semantic_mask).resize((new_w, new_h), resample=Image.NEAREST) 
+    mask_arr = np.array(mask_img)
+
+    debug = True
+    if debug:
+        def validate_resize_recovery(original_mask, resized_mask):
+            recovered = Image.fromarray(resized_mask).resize(original_mask.shape[::-1], resample=Image.NEAREST)
+            recovered_mask = np.array(recovered)
+            error = (original_mask != recovered_mask).sum()
+            total = original_mask.size
+            print(f"Mismatch pixels: {error}/{total} ({100*error/total:.2f}%)")
+        validate_resize_recovery(semantic_mask, mask_arr)
        
-    #     def generate_binary_masks(array: np.ndarray):
-    #         unique_values = np.unique(array)
-    #         masks = [(array == val).astype(np.uint8) for val in unique_values]
-    #         return masks, unique_values.tolist()
-        
-    #     def save_debug_images(debug_dir, key, image, mask_arr, semantic_mask, mask_class):
-    #         from mmdet.core.visualization.image import imshow_det_bboxes
-            
-    #         os.makedirs(debug_dir, exist_ok=True)
-    #         bitmasks = [m[0] for m in mask_class]
-    #         class_names = [m[1] for m in mask_class]
-    #         #bitmasks, class_names = generate_binary_masks(semantic_mask)
-    #         imshow_det_bboxes(img_arr,
-    #                     bboxes=None,
-    #                     labels=np.arange(len(bitmasks)),
-    #                     segms=np.stack(bitmasks),
-    #                     class_names=class_names,
-    #                     font_size=10,
-    #                     show=False,
-    #                     out_file=os.path.join(debug_dir, f"{key}_mask.jpg"))
-            
-    #         bitmasks, class_names = generate_binary_masks(mask_arr)
-    #         imshow_det_bboxes(np.array(img.resize((new_h, new_w), Image.BILINEAR)),
-    #                     bboxes=None,
-    #                     labels=np.arange(len(bitmasks)),
-    #                     segms=np.stack(bitmasks),
-    #                     class_names=class_names,
-    #                     font_size=25,
-    #                     show=False,
-    #                     out_file=os.path.join(debug_dir, f"{key}_small_mask.jpg"))
-            
-    #         resized_mask_img = Image.fromarray(mask_arr.astype(np.uint16), mode='I;16')
-    #         recovered_mask_img = resized_mask_img.resize(semantic_mask.shape[::-1], resample=Image.NEAREST)
-    #         bitmasks, class_names = generate_binary_masks(np.array(recovered_mask_img))
-    #         imshow_det_bboxes(np.array(img),
-    #                     bboxes=None,
-    #                     labels=np.arange(len(bitmasks)),
-    #                     segms=np.stack(bitmasks),
-    #                     class_names=class_names,
-    #                     font_size=25,
-    #                     show=False,
-    #                     out_file=os.path.join(debug_dir, f"{key}_resized_mask.jpg"))
-          
-    #     save_debug_images(debug_folder, key, img, mask_arr, semantic_mask, mask_class)
+        def save_debug_images(debug_dir, key, image, mask_arr, semantic_mask):
+            os.makedirs(debug_dir, exist_ok=True)
+            orig_mask_img = Image.fromarray(semantic_mask.astype(np.uint16), mode='I;16')
+            resized_mask_img = Image.fromarray(mask_arr.astype(np.uint16), mode='I;16')
+            recovered_mask_img = resized_mask_img.resize(semantic_mask.shape[::-1], resample=Image.NEAREST)
+
+            image.save(os.path.join(debug_dir, f"{key}_image.jpg"))
+            orig_mask_img.save(os.path.join(debug_dir, f"{key}_mask_orig.png"))
+            resized_mask_img.save(os.path.join(debug_dir, f"{key}_mask_resized.png"))
+            recovered_mask_img.save(os.path.join(debug_dir, f"{key}_mask_recovered.png"))
+        save_debug_images(debug_folder, key, img, mask_arr, semantic_mask)
     
-    # return mask_img , semantic_mask 
+    return mask_arr , semantic_mask 
 
 def main(rank, args):
     dist.init_process_group("nccl", rank=rank, world_size=args.world_size)
@@ -218,8 +181,7 @@ def main(rank, args):
     local_files = tar_files[rank::args.world_size]
     
     processed_tars,processed_imgs = [], []
-    resume_path = os.path.join(output_dir, '..', 'mask_precess_resume', f"rank{rank}_resume.json")
-    os.makedirs(os.path.join(output_dir, '..', 'mask_precess_resume'), exist_ok=True)
+    resume_path = os.path.join(output_dir, f"rank{rank}_resume.json")
     if os.path.exists(resume_path):
         with open(resume_path, "r") as f:
             resume_data = json.load(f)
@@ -238,35 +200,38 @@ def main(rank, args):
         output_tar_path = os.path.join(output_dir, f"{tar_name}.tar")
         with wds.TarWriter(output_tar_path) as sink:
             for idx, item in enumerate(dataset if rank != 0 else tqdm.tqdm(dataset, desc='DatasetLens: ')):
-                #if idx > 5:
-                    #break
+                if idx > 20:
+                    break
                 key = item["__key__"]
                 if key in processed_imgs:
                     continue
                 img: Image.Image = item["jpg"]
-                semantic_mask = semantic_infer_one_image(img, key, processors, models, rank)  
-            
+                mask_arr, semantic_mask = semantic_infer_one_image(img, key, processors, models, rank)  
+                
+                buf = io.BytesIO()
+                np.save(buf, mask_arr.astype(np.int32))  # 保存为 .npy
+                buf.seek(0)
                 new_item = {
                     "jpg": img,
                     "txt": item['txt'],
-                    #"smallmask.tiff": mask_img, 
-                    "mask.tiff":Image.fromarray(semantic_mask, mode="I;16"),  
+                    "small_mask.npy": buf.read(), 
+                    #"mask.npy":semantic_mask,  
                     "__key__": key,
                     "__url__": item['__url__']
                     }
                 sink.write(new_item)
                 processed_imgs.append(key)
 
-                if idx % 500 == 0:
-                    resume_info = {
-                    "processed_tars": processed_tars,
-                    "processed_imgs": processed_imgs,
-                    "global_classnames": sorted(processors['global_classnames']),
-                    "label2index": processors['label2index'],
-                    }
-                    
-                    with open(resume_path, "w") as f:
-                        json.dump(resume_info, f, indent=2)
+            if idx % 500 == 0:
+                resume_info = {
+                "processed_tars": processed_tars,
+                "processed_imgs": processed_imgs,
+                "global_classnames": sorted(processors['global_classnames']),
+                "label2index": processors['label2index'],
+                }
+                
+                with open(resume_path, "w") as f:
+                    json.dump(resume_info, f, indent=2)
                          
         
         processed_tars.append(tar_name)
