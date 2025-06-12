@@ -42,12 +42,12 @@ os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 #os.environ['CUDA_VISIBLE_DEVICES'] = '6'
 
 input_dir = '/mnt/33t/cy/blip3o_dataset'
-output_dir = '/mnt/33t/cy/mask_dataset'
+output_dir = '/mnt/33t/cy/mask_dataset_bgr'
 base_dir = '/mnt/33t/cy/mllm_models/semantic_sam'
 
 debug = True
 if debug:
-    debug_folder = "/mnt/33t/cy/mask_debug_rgb"
+    debug_folder = "/mnt/33t/cy/mask_debug_bgr"
     os.makedirs(debug_folder, exist_ok=True)
 os.makedirs(output_dir, exist_ok=True)
 

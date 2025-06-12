@@ -214,7 +214,7 @@ def main(rank, args):
         crop_n_points_downscale_factor=2, min_mask_region_area=100, output_mode='coco_rle')
     
     tar_files = sorted([os.path.join(input_dir, f) for f in os.listdir(input_dir) if f.endswith('.tar')])
-    tar_files = tar_files[:7]
+    
     local_files = tar_files[rank::args.world_size]
     
     processed_tars,processed_imgs = [], []
