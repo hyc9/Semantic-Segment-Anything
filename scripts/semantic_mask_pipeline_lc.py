@@ -204,10 +204,11 @@ def main(rank, args):
                         sink.write(new_item)
                         processed_imgs.append(key)
                     result_buffer = []
+                    classname_buffer = set()
                     resume_info = {
                     "processed_tars": processed_tars,
                     "processed_imgs": processed_imgs,
-                    "global_classnames": sorted(processors['global_classnames']),
+                    "global_classnames": processors['global_classnames'],
                     "label2index": processors['label2index'],
                     }
                     
@@ -218,6 +219,8 @@ def main(rank, args):
         processed_tars.append(tar_name)
     if rank == 0:
         with open(os.path.join(output_dir, f"label2index.json"), "w") as f:
+            json.dump(processors['label2index'], f, indent=2)
+    with open(os.path.join(output_dir, '..','mask_debug_rgb', f"rank{rank}_label2index.json"), "w") as f:
             json.dump(processors['label2index'], f, indent=2)
 
 
