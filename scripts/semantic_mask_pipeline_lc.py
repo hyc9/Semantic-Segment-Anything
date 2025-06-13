@@ -133,10 +133,12 @@ def main(rank, args):
     }
 
     sam = sam_model_registry["vit_h"](checkpoint=f"{base_dir}/SAM-vit-h/sam_vit_h_4b8939.pth").to(device)
+    #processors['sam_generator'] = SamAutomaticMaskGenerator(model=sam, points_per_side=32,
+        #pred_iou_thresh=0.86, stability_score_thresh=0.92, crop_n_layers=0,
+        #crop_n_points_downscale_factor=2, min_mask_region_area=100, output_mode='coco_rle')
     processors['sam_generator'] = SamAutomaticMaskGenerator(model=sam, points_per_side=32,
-        pred_iou_thresh=0.86, stability_score_thresh=0.92, crop_n_layers=0,
-        crop_n_points_downscale_factor=2, min_mask_region_area=100, output_mode='coco_rle')
-    
+        pred_iou_thresh=0.88, stability_score_thresh=0.95, crop_n_layers=0,
+        crop_n_points_downscale_factor=2, min_mask_region_area=200, output_mode='coco_rle')
     tar_files = sorted([os.path.join(input_dir, f) for f in os.listdir(input_dir) if f.endswith('.tar')])
     
     local_files = tar_files[rank::args.world_size]

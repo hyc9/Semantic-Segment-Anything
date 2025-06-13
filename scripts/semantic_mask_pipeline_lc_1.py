@@ -42,7 +42,7 @@ os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 #os.environ['CUDA_VISIBLE_DEVICES'] = '6'
 
 input_dir = '/ssdwork/chengyu/blip3o_dataset'
-output_dir = '/ssdwork/chengyu/mask_dataset'
+output_dir = '/ssdwork/chengyu/mask_dataset_test'
 base_dir = '/ssdwork/chengyu/mllm_models/semantic_sam'
 
 debug = True
