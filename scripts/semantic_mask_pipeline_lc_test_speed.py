@@ -42,7 +42,7 @@ os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 #os.environ['CUDA_VISIBLE_DEVICES'] = '6'
 
 input_dir = '/ssdwork/chengyu/blip3o_dataset'
-output_dir = '/ssdwork/chengyu/mask_dataset'
+output_dir = '/ssdwork/chengyu/mask_dataset_test'
 base_dir = '/ssdwork/chengyu/mllm_models/semantic_sam'
 
 debug = False
@@ -142,8 +142,8 @@ def main(rank, args):
     local_files = tar_files[rank::args.world_size]
     
     processed_tars,processed_imgs = [], []
-    resume_path = os.path.join(output_dir, '..', 'mask_precess_resume', f"rank{rank}_resume.json")
-    os.makedirs(os.path.join(output_dir, '..', 'mask_precess_resume'), exist_ok=True)
+    resume_path = os.path.join(output_dir, '..', 'mask_precess_resume_test', f"rank{rank}_resume.json")
+    os.makedirs(os.path.join(output_dir, '..', 'mask_precess_resume_test'), exist_ok=True)
     if os.path.exists(resume_path):
         with open(resume_path, "r") as f:
             resume_data = json.load(f)
