@@ -41,13 +41,15 @@ os.environ['MASTER_PORT'] = '12306'
 os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 #os.environ['CUDA_VISIBLE_DEVICES'] = '6'
 
-input_dir = '/ssdwork/chengyu/blip3o_dataset'
-output_dir = '/ssdwork/chengyu/mask_dataset'
-base_dir = '/ssdwork/chengyu/mllm_models/semantic_sam'
 
-debug = False
+test_folder = 'test_ex/sam_88_95_200'
+input_dir = '/mnt/33t/cy/blip3o_dataset'
+output_dir = f'/mnt/33t/cy/{test_folder}/mask_dataset'
+base_dir = '/mnt/33t/cy/mllm_models/semantic_sam'
+
+debug = True
 if debug:
-    debug_folder = "/mnt/33t/cy/mask_debug_rgb"
+    debug_folder = f"/mnt/33t/cy/{test_folder}/mask_debug"
     os.makedirs(debug_folder, exist_ok=True)
 os.makedirs(output_dir, exist_ok=True)
 
@@ -70,6 +72,7 @@ def semantic_infer_one_image(img: Image.Image, key, processors, models, rank):
     """对一张图像执行语义标注, 返回 shape=(256/w, w) 的单通道 numpy array, 值为 0~num_class"""
     from mmcv import imcrop
     import pycocotools.mask as maskUtils
+    #img = Image.fromarray(np.array(img)[:,:, ::-1]) #RGB -> BGR
     img_arr = np.array(img)
     anns = {'annotations': processors['sam_generator'].generate(img_arr)}
     class_ids_from_oneformer_coco = oneformer_coco_segmentation(img,
@@ -105,11 +108,86 @@ def semantic_infer_one_image(img: Image.Image, key, processors, models, rank):
         mask_class.append((valid_mask.numpy(), class_name))
         local_classnames.add(class_name)
     
-    return mask_class, local_classnames
+    processors['global_classnames'] = processors['global_classnames'].union(sync_classnames_across_processes(local_classnames))
+    for class_name in processors['global_classnames']:
+        if class_name in processors['label2index']:
+            continue
+        else:
+            processors['label2index'][class_name] = len(processors['label2index'])
     
+    semantic_mask = np.zeros((img.height, img.width), dtype=np.int16)
+    for mask, name in mask_class:
+        semantic_mask[mask] = processors['label2index'][name]
+    
+    h, w = semantic_mask.shape
+    aspect = h / w
+    new_h = int((256 * aspect)**0.5)
+    new_w = 256 // new_h
+    assert new_h * new_w == 256
+    mask_img = Image.fromarray(semantic_mask).resize((new_w, new_h), resample=Image.NEAREST) 
+    mask_arr = np.array(mask_img)
+
+    debug = True
+    if debug:
+        def validate_resize_recovery(original_mask, resized_mask):
+            recovered = Image.fromarray(resized_mask, mode='I;16').resize(original_mask.shape[::-1], resample=Image.NEAREST)
+            recovered_mask = np.array(recovered)
+            error = (original_mask != recovered_mask).sum()
+            total = original_mask.size
+            img_recover = np.array(img.resize((new_w, new_h), Image.BILINEAR).resize((h, w), Image.BILINEAR))
+            error_img = (img_recover != img_arr).sum()
+            total_img = img_arr.size
+            print(f"Mismatch pixels in mask: {error}/{total} ({100*error/total:.2f}%), img: {error_img}/{total_img} ({100*error_img/total_img:.2f}%)")
+        validate_resize_recovery(semantic_mask, mask_arr)
+       
+        def generate_binary_masks(array: np.ndarray):
+            unique_values = np.unique(array)
+            masks = [(array == val).astype(np.uint8) for val in unique_values]
+            return masks, unique_values.tolist()
+        
+        def save_debug_images(debug_dir, key, image, mask_arr, semantic_mask, mask_class):
+            from mmdet.core.visualization.image import imshow_det_bboxes
+            
+            os.makedirs(debug_dir, exist_ok=True)
+            bitmasks = [m[0] for m in mask_class]
+            class_names = [m[1] for m in mask_class]
+            #bitmasks, class_names = generate_binary_masks(semantic_mask)
+            imshow_det_bboxes(img_arr,
+                        bboxes=None,
+                        labels=np.arange(len(bitmasks)),
+                        segms=np.stack(bitmasks),
+                        class_names=class_names,
+                        font_size=10,
+                        show=False,
+                        out_file=os.path.join(debug_dir, f"{key}_mask.jpg"))
+            
+            bitmasks, class_names = generate_binary_masks(mask_arr)
+            imshow_det_bboxes(np.array(img.resize((new_h, new_w), Image.BILINEAR)),
+                        bboxes=None,
+                        labels=np.arange(len(bitmasks)),
+                        segms=np.stack(bitmasks),
+                        class_names=class_names,
+                        font_size=25,
+                        show=False,
+                        out_file=os.path.join(debug_dir, f"{key}_small_mask.jpg"))
+            
+            resized_mask_img = Image.fromarray(mask_arr.astype(np.uint16), mode='I;16')
+            recovered_mask_img = resized_mask_img.resize(semantic_mask.shape[::-1], resample=Image.NEAREST)
+            bitmasks, class_names = generate_binary_masks(np.array(recovered_mask_img))
+            imshow_det_bboxes(np.array(img),
+                        bboxes=None,
+                        labels=np.arange(len(bitmasks)),
+                        segms=np.stack(bitmasks),
+                        class_names=class_names,
+                        font_size=25,
+                        show=False,
+                        out_file=os.path.join(debug_dir, f"{key}_resized_mask.jpg"))
+          
+        save_debug_images(debug_folder, key, img, mask_arr, semantic_mask, mask_class)
+    
+    return mask_img , semantic_mask 
 
 def main(rank, args):
-    
     dist.init_process_group("nccl", rank=rank, world_size=args.world_size)
     torch.cuda.set_device(rank)
     device = torch.cuda.current_device() 
@@ -133,14 +211,12 @@ def main(rank, args):
     }
 
     sam = sam_model_registry["vit_h"](checkpoint=f"{base_dir}/SAM-vit-h/sam_vit_h_4b8939.pth").to(device)
-    #processors['sam_generator'] = SamAutomaticMaskGenerator(model=sam, points_per_side=32,
-        #pred_iou_thresh=0.86, stability_score_thresh=0.92, crop_n_layers=0,
-        #crop_n_points_downscale_factor=2, min_mask_region_area=100, output_mode='coco_rle')
     processors['sam_generator'] = SamAutomaticMaskGenerator(model=sam, points_per_side=32,
         pred_iou_thresh=0.88, stability_score_thresh=0.95, crop_n_layers=0,
         crop_n_points_downscale_factor=2, min_mask_region_area=200, output_mode='coco_rle')
-    tar_files = sorted([os.path.join(input_dir, f) for f in os.listdir(input_dir) if f.endswith('.tar')])
     
+    tar_files = sorted([os.path.join(input_dir, f) for f in os.listdir(input_dir) if f.endswith('.tar')])
+    tar_files = tar_files[:7]
     local_files = tar_files[rank::args.world_size]
     
     processed_tars,processed_imgs = [], []
@@ -162,60 +238,28 @@ def main(rank, args):
         dataset = load_dataset("webdataset", data_files=tar_path, split="train")
         
         output_tar_path = os.path.join(output_dir, f"{tar_name}.tar")
-        add_idx = 0
-        while os.path.exists(output_tar_path):
-            output_tar_path = os.path.join(output_dir, f"{tar_name}-{add_idx:04d}.tar")
-            add_idx += 1
-
         with wds.TarWriter(output_tar_path) as sink:
-            result_buffer = []
-            classname_buffer = set()
             for idx, item in enumerate(dataset if rank != 0 else tqdm.tqdm(dataset, desc='DatasetLens: ')):
+                if idx > 5:
+                    break
                 key = item["__key__"]
                 if key in processed_imgs:
                     continue
                 img: Image.Image = item["jpg"]
-                try:
-                    mask_class, class_names = semantic_infer_one_image(img, key, processors, models, rank)
-                except:
-                    print(f'Escape {key}')
-                    continue
-                result_buffer.append((item, mask_class))
-                classname_buffer = classname_buffer.union(class_names)
-                if len(result_buffer) == 200:
-                    new_classnames = set()
-                    for name in classname_buffer:
-                        if name in processors['label2index']:
-                            continue
-                        else:
-                            new_classnames.add(name)
-                    
-                    processors['global_classnames'] = processors['global_classnames'].union(sync_classnames_across_processes(new_classnames))
-                    processors['global_classnames'] = sorted(processors['global_classnames'])  #我的问题是，这能保证不同rank之间的classname编号是一致的吗 
-                    dist.barrier()
-                    for class_name in processors['global_classnames']:
-                        if class_name in processors['label2index']:
-                            continue
-                        else:
-                            processors['label2index'][class_name] = len(processors['label2index'])
-                    processors['global_classnames'] = set(processors['global_classnames'])
-                    for item, mask_class in result_buffer:
-                        key = item["__key__"]
-                        img: Image.Image = item["jpg"]
-                        semantic_mask = np.zeros((img.height, img.width), dtype=np.int16)
-                        for mask, name in mask_class:
-                            semantic_mask[mask] = processors['label2index'][name]
-                        new_item = {
-                            "jpg": img,
-                            "txt": item['txt'],
-                            "tiff":Image.fromarray(semantic_mask, mode="I;16"),  
-                            "__key__": key,
-                            "__url__": item['__url__']
-                            }
-                        sink.write(new_item)
-                        processed_imgs.append(key)
-                    result_buffer = []
-                    classname_buffer = set()
+                mask_img, semantic_mask = semantic_infer_one_image(img, key, processors, models, rank)  
+            
+                new_item = {
+                    "jpg": img,
+                    "txt": item['txt'],
+                    "smallmask.tiff": mask_img, 
+                    "mask.tiff":Image.fromarray(semantic_mask, mode="I;16"),  
+                    "__key__": key,
+                    "__url__": item['__url__']
+                    }
+                sink.write(new_item)
+                processed_imgs.append(key)
+
+                if idx % 500 == 0:
                     resume_info = {
                     "processed_tars": processed_tars,
                     "processed_imgs": processed_imgs,
@@ -230,8 +274,6 @@ def main(rank, args):
         processed_tars.append(tar_name)
     if rank == 0:
         with open(os.path.join(output_dir, f"label2index.json"), "w") as f:
-            json.dump(processors['label2index'], f, indent=2)
-    with open(os.path.join(output_dir, '..','mask_debug_rgb', f"rank{rank}_label2index.json"), "w") as f:
             json.dump(processors['label2index'], f, indent=2)
 
 
